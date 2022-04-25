@@ -27,16 +27,19 @@ if __name__ == '__main__':
     client = create_client_socket(args.port) 
 
     while True:
-
         #two types: 1 > print server result  2 > send to server  
         sockets_list = [sys.stdin, client]
         read_sockets,write_socket, error_socket = select.select(sockets_list,[],[])
         for socket in read_sockets:
             if socket == client:
-                print(socket.recv(2048).decode()) 
+                msg = socket.recv(2048).decode()
+                print(msg)
+                if "Goodbye" in msg:
+                    break
             else:
                 post_msg = sys.stdin.readline()
                 client.send(post_msg.encode())
+    client.close()
         
 
     

@@ -6,10 +6,10 @@ import argparse
 from datetime import date
 
 '''
-@Author: Jike Zhong, xxx
+@Author: Jike Zhong
 CSE 3461 Final Project
 '''
-
+#We utilize OOP design concept to make Message, Group and Thread instances
 class Message():
     def __init__(self, id, sender, subject, content):
         self.id = id
@@ -131,14 +131,14 @@ class ClientThread(threading.Thread):
     #we want them to know what to expect
     def send_commands(self):
         self.conn.send("\n[System Message] The following commands are for you to use!".encode())
-        self.conn.send("\n[System Message] %join             : Join the discussion board".encode())
-        self.conn.send("\n[System Message] %help             : Display commands again".encode())  
-        self.conn.send("\n[System Message] %quit             : Quit the chat room".encode())
+        self.conn.send("\n%join             : Join the discussion board".encode())
+        self.conn.send("\n%help             : Display commands again".encode())  
+        self.conn.send("\n%quit             : Quit the chat room".encode())
         self.conn.send("\n[System Message] The following commands can be used only if you have already joined the discussion board, see %groupjoin!".encode())
-        self.conn.send("\n[System Message] %users            : View users in this discussion board".encode())
-        self.conn.send("\n[System Message] %message <id>     : View the content of a message".encode())
-        self.conn.send("\n[System Message] %leave            : Leave the discussion board".encode())
-        self.conn.send("\n[System Message] %post <subject> <content>: Post to the discussion board\n".encode())
+        self.conn.send("\n%users            : View users in this discussion board".encode())
+        self.conn.send("\n%message <id>     : View the content of a message".encode())
+        self.conn.send("\n%leave            : Leave the discussion board".encode())
+        self.conn.send("\n%post <subject> <content>: Post to the discussion board\n".encode())
 
     #main thread
     def run(self):
@@ -148,27 +148,29 @@ class ClientThread(threading.Thread):
 
         while True: 
             action = self.conn.recv(2048).decode().strip()
-
-            #execute function according to user input
-            if "%join" in action: 
-                self.join(action)
-            elif "%users" in action:
-                self.users(action)
-            elif "%message" in action:
-                self.message(action)
-            elif "%post" in action:
-                self.post(action)
-            elif "leave" in action:
-                self.leave(action)
-            elif "%help" in action:
-                self.send_commands()
-            elif "%quit" in action:
-                break
-            else:
+            try:
+                #execute function according to user input
+                if "%join" in action: 
+                    self.join(action)
+                elif "%users" in action:
+                    self.users(action)
+                elif "%message" in action:
+                    self.message(action)
+                elif "%post" in action:
+                    self.post(action)
+                elif "leave" in action:
+                    self.leave(action)
+                elif "%help" in action:
+                    self.send_commands()
+                elif "%quit" in action:
+                    self.conn.send("\nGoodbye, it was nice seeing you!".encode())
+                    break
+                else:
+                    self.conn.send("\n[System Message] Invalid command, please enter again. Use %help to display all commands if you need\n".encode())
+            except:
                 self.conn.send("\n[System Message] Invalid command, please enter again. Use %help to display all commands if you need\n".encode())
-        
-        self.conn.send("\nGoodbye, it was nice seeing you!".encode())
-        self.conn.close()
+                continue
+        print ("Client at {} disconnected...".format(self.addr))
 
 def arg_parse():
     parser = argparse.ArgumentParser(description='Multi-threaded Web Server')

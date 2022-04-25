@@ -6,10 +6,11 @@ import argparse
 from datetime import date
 
 '''
-@Author: Jike Zhong, xxx
+@Author: Jike Zhong
 CSE 3461 Final Project
 '''
 
+#We utilize OOP design concept to make Message, Group and Thread instances
 class Message():
     def __init__(self, id, sender, subject, content):
         self.id = id
@@ -41,6 +42,7 @@ class ClientThread(threading.Thread):
         self.conn = conn
         self.user_name = None
         self.curr_group = None
+        self.group_joined = []
         print ("New connection added: ", self.addr)
 
     #sets the user name, check for invalid response
@@ -55,8 +57,9 @@ class ClientThread(threading.Thread):
         self.conn.send("\n[System Message] Success! Welcom to the chat board {}!\n".format(self.user_name).encode())
 
     #broadcast @msg to all users (except self) in the current group
-    def broadcast(self, msg):
-        for client in [m for m in client_threads if m.user_name in self.curr_group.members]:
+    def broadcast(self, msg, including_self=False, group=None):
+        group_to_send = group if group is not None else self.curr_group
+        for client in [m for m in client_threads if (m.user_name in group_to_send.members and m.curr_group.id == group_to_send.id)]:
             if not including_self:
                 if self.user_name != client.user_name:
                     client.conn.send(msg.encode())
@@ -73,54 +76,71 @@ class ClientThread(threading.Thread):
     
     #checks if the user has joined a group
     #we only allow them to use certain commands (ex. %grouppost) provided they have joined a group
-    def ok_to_post(self):
-        if self.curr_group is None:
-            self.conn.send("\n\n\n[System Message] >>>Warning: You must join a group before using this command!<<<\n\n\n".encode())
+    #self_ means the user's current group needs to be the group with @group_id
+    def ok_to_post(self, group_id, self_=False):
+        joined_groups = [g.id for g in self.group_joined]
+        if int(group_id) not in joined_groups:
+            self.conn.send("\n\n\n[System Message] >>>Warning: You are not in group {}!<<<\n\n\n".format(group_id).encode())
             return False
         else:
+            if self_ is True and self.curr_group is not None:
+                if self.curr_group.id != int(group_id): 
+                    self.conn.send("\n\n\n[System Message] >>>Warning: You cannot view the info of other groups!<<<\n\n\n".encode())
+                    return False
             return True
 
     #shows the user list of this group
     def group_users(self, action):
-        if not self.ok_to_post(): return 
+        group_id = action.split(" ")[1]
+        if not self.ok_to_post(group_id, True): return 
+        group = [g for g in groups if g.id == int(group_id)][0]
         self.conn.send("\n[System Message] Displaying group members:\n".encode())
-        for i, name in enumerate(self.curr_group.members):
+        for i, name in enumerate(group.members):
             self.conn.send("{}: {}\n".format(i+1, name).encode())
     
     #retrieve the message content, provided the message id
     def group_message(self, action):
-        if not self.ok_to_post(): return 
-        msg_id = action.split(" ")[1]
-        msg = [m for m in self.curr_group.msgs if m.id == int(msg_id)][0]
+        group_id = action.split(" ")[1]
+        if not self.ok_to_post(group_id, True): return 
+        group = [g for g in groups if g.id == int(group_id)][0]
+        msg_id = action.split(" ")[2]
+        msg = [m for m in group.msgs if m.id == int(msg_id)][0]
         self.conn.send("\n[System Message] Displaying message sent by {} on {}:\n".format(msg.sender, msg.date).encode())
         self.conn.send("{}".format(msg.content).encode())
     
     #post to the group's discussion board
     def group_post(self, action):
-        if not self.ok_to_post(): return 
+        group_id = action.split(" ")[1]
+        if not self.ok_to_post(group_id): return 
+        group = [g for g in groups if g.id == int(group_id)][0]
+
         msg = action.split(" ")
-        msg_id = max([m.id for m in self.curr_group.msgs])+1
+        msg_id = max([m.id for m in group.msgs])+1
         msg_sender = self.user_name
-        msg_subject = msg[1]
-        msg_content = msg[2]
+        msg_subject = msg[2]
+        msg_content = msg[3]
         new_msg = Message(msg_id, msg_sender, msg_subject, msg_content)
-        self.curr_group.add_msg(new_msg)
-        self.broadcast("\n[User Message] - Message ID: {}, Sender: {}, Date: {}, Subject: {}\n".format(new_msg.id, new_msg.sender, new_msg.date, new_msg.subject))
-        self.conn.send("\n[You] - Message ID: {}, Sender: {}, Date: {}, Subject: {}\n".format(new_msg.id, new_msg.sender, new_msg.date, new_msg.subject).encode())
+
+        group.add_msg(new_msg)
+        self.broadcast("\n[User Message] - Message ID: {}, Sender: {}, Date: {}, Subject: {}\n".format(new_msg.id, new_msg.sender, new_msg.date, new_msg.subject), group = group)
+        self.conn.send("\n[You] to Group {} - Message ID: {}, Sender: {}, Date: {}, Subject: {}\n".format(group.name, new_msg.id, new_msg.sender, new_msg.date, new_msg.subject).encode())
 
     #exit a group
     def group_leave(self, action):
-        if not self.ok_to_post(): return 
-        self.curr_group.remove_member(self.user_name)
-        self.broadcast("\n[System Message] User {} just left the group!\n".format(self.user_name))
+        group_id = action.split(" ")[1]
+        if not self.ok_to_post(group_id): return 
+        group = [g for g in groups if g.id == int(group_id)][0]
+        group.remove_member(self.user_name)
+        self.broadcast("\n[System Message] User {} just left group {}!\n".format(self.user_name, group.name), group=group)
+        self.group_joined.remove(group)
+        self.conn.send("\n[System Message] You just left group {}!\n".format(group.name).encode())
         self.curr_group = None
-        self.conn.send("\n[System Message] You just left the group!\n".encode())
 
     #view available groups
-    def view_groups(self, action):
-        group_names = [g.name for g in groups]
-        group_ids = [g.id for g in groups]
-        self.conn.send("\n[System Message] Displaying available groups: \n".encode())
+    def view_groups(self, groups_=None):
+        group_names = [g.name for g in groups_]
+        group_ids = [g.id for g in groups_]
+        self.conn.send("\n[System Message] Displaying groups: \n".encode())
         for name, id in zip(group_names, group_ids):
             self.conn.send("Group id:{} name:{}\n".format(id, name).encode())
 
@@ -130,6 +150,8 @@ class ClientThread(threading.Thread):
         group = [g for g in groups if g.id == int(group_id)][0]
         if self.user_name not in group.members:
             group.add_member(self.user_name)
+            self.group_joined.append(group)
+
         self.curr_group = group
         self.broadcast("\n[System Message] User {} just joined the group!\n".format(self.user_name))
         self.conn.send("\n[System Message] You just joined the group {}!\n".format(group.name).encode())
@@ -142,47 +164,62 @@ class ClientThread(threading.Thread):
     #we want them to know what to expect
     def send_commands(self):
         self.conn.send("\n[System Message] The following commands are for you to use!".encode())
-        self.conn.send("\n[System Message] %groups           : View available groups".encode())
-        self.conn.send("\n[System Message] %groupjoin <id>   : Join a group".encode())
-        self.conn.send("\n[System Message] %help             : Display commands again".encode())  
-        self.conn.send("\n[System Message] %quit             : Quit the chat room".encode())
-        self.conn.send("\n[System Message] The following commands can be used only if you have already joined a group, see %groupjoin!".encode())
-        self.conn.send("\n[System Message] %groupusers       : View users in this group".encode())
-        self.conn.send("\n[System Message] %groupmessage <id>: View the content of a message".encode())
-        self.conn.send("\n[System Message] %groupleave       : Leave the group".encode())
-        self.conn.send("\n[System Message] %grouppost <subject> <content>: Post to the group\n".encode())
+        self.conn.send("\n%groups                                  : View available groups".encode())
+        self.conn.send("\n%mygroups                                : View the groups you have joined".encode())
+        self.conn.send("\n%groupjoin <group_id>                    : Join a group".encode())
+        self.conn.send("\n%help                                    : Display commands again".encode())  
+        self.conn.send("\n%quit                                    : Quit the chat room".encode())
+        self.conn.send("\n[System Message] The following commands can be used only if you have already joined the specific group, see %groupjoin!".encode())
+        self.conn.send("\n%groupusers <group_id>                   : View users in this group".encode())
+        self.conn.send("\n%groupmessage <group_id> <message_id>    : View the content of a message".encode())
+        self.conn.send("\n%groupleave <group_id>                   : Leave the group".encode())
+        self.conn.send("\n%grouppost <group_id> <subject> <content>: Post to the group\n".encode())
+
+    #shows all groups that the user has joined
+    def show_curr_groups(self):
+        self.conn.send("\n[System Message] Displaying your groups: \n".encode())
+        if len(self.group_joined) == 0:
+            self.conn.send("\n[System Message] You have joined no group, use %groups to view available groups\n".encode())
+        else:
+            joined_groups = [g for g in self.group_joined]
+            self.view_groups(joined_groups)
 
     #main thread
     def run(self):
-        
         self.set_user_name()
         self.send_commands()
 
         while True: 
             action = self.conn.recv(2048).decode().strip()
-
-            #execute function according to user input
-            if "%groups" in action:
-                self.view_groups(action)
-            elif "%groupjoin" in action: 
-                self.group_join(action)
-            elif "%groupusers" in action:
-                self.group_users(action)
-            elif "%groupmessage" in action:
-                self.group_message(action)
-            elif "%grouppost" in action:
-                self.group_post(action)
-            elif "%groupleave" in action:
-                self.group_leave(action)
-            elif "%help" in action:
-                self.send_commands()
-            elif "%quit" in action:
-                break
-            else:
+            try:
+                #execute function according to user input
+                if "%groups" in action:
+                    self.view_groups(groups)
+                elif "%groupjoin" in action: 
+                    self.group_join(action)
+                elif "%groupusers" in action:
+                    self.group_users(action)
+                elif "%groupmessage" in action:
+                    self.group_message(action)
+                elif "%grouppost" in action:
+                    self.group_post(action)
+                elif "%groupleave" in action:
+                    self.group_leave(action)
+                elif "%help" in action:
+                    self.send_commands()
+                elif "%mygroups" in action:
+                    self.show_curr_groups()
+                elif "%quit" in action:
+                    self.conn.send("\nGoodbye, it was nice seeing you!".encode())
+                    break
+                else:
+                    self.conn.send("\n[System Message] Invalid command, please enter again. Use %help to display all commands if you need\n".encode())
+            except:
                 self.conn.send("\n[System Message] Invalid command, please enter again. Use %help to display all commands if you need\n".encode())
+                continue
+        print ("Client at {} disconnected...".format(self.addr))
         
-        self.conn.send("\nGoodbye, it was nice seeing you!".encode())
-        self.conn.close()
+       
 
 def make_group():
     return [Group(idx, name) for idx, name in enumerate(['A','B','C','D','E'])]
@@ -201,8 +238,12 @@ def create_server_socket(port):
 if __name__ == '__main__':
     args =  arg_parse() 
     server = create_server_socket(args.port)
+
+    #storing all running threads, as well as groups
     global client_threads, groups
     client_threads = []
+    
+    #make 5 inital group
     groups = make_group()
 
     #make dummy messages
@@ -218,4 +259,4 @@ if __name__ == '__main__':
         new_thread = ClientThread(conn, ip)
         new_thread.start()
         client_threads.append(new_thread)
-
+    
