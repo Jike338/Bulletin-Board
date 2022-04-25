@@ -1,25 +1,21 @@
 Bulletin-Board-System
 The client server application simulates the news bulletin board system, and uses socket programming and multithreading to realize the server
 
+Notice: You need a mac system to run this program due to select methoud being different from Windows and Mac, it only can be used in Mac
+
 Dependencies:
 Python 3.10
 
-Author: Jike Zhong, Haojia Feng
+Author: 
+Jike Zhong, Haojia Feng
 
 Instructions:
-
-cd part1 (or part2)
-
-Compile the server:
-python3 server1.py --port 8888
-Compile the client:
-python3 client1.py --port 8888
+cd part1 
+python3 server.py --port 8888 
+python3 client.py --port 8888
 
 
-Notice: Work in Mac system when applying this to Windoes system, because select methoud is different from Windows and Mac, it only can be used in Mac
-
-Functionality:
-
+Core Functionalities:
 
 For part 1:
 %join             : Join the discussion board
