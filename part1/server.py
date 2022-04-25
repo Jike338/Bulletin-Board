@@ -55,9 +55,12 @@ class ClientThread(threading.Thread):
         self.conn.send("\n[System Message] Success! Welcom to the chat board {}!\n".format(self.user_name).encode())
 
     #broadcast @msg to all users (except self) in the current group
-    def broadcast(self, msg):
+    def broadcast(self, msg, including_self=False):
         for client in [m for m in client_threads if m.user_name in self.curr_group.members]:
-            if self.user_name != client.user_name:
+            if not including_self:
+                if self.user_name != client.user_name:
+                    client.conn.send(msg.encode())
+            else:
                 client.conn.send(msg.encode())
 
     #displays the latest two messages from previous users
@@ -119,6 +122,9 @@ class ClientThread(threading.Thread):
         self.curr_group.add_member(self.user_name)
         self.broadcast("\n[System Message] User {} just joined the group!\n".format(self.user_name))
         self.conn.send("\n[System Message] You just joined the group {}!\n".format(group.name).encode())
+        self.broadcast("\nCurrent group members are: \n", True)
+        for i, name in enumerate(self.curr_group.members):
+            self.broadcast("{}: {}\n".format(i+1, name), True)
         self.display_latest_two()
 
     #sends a list of available commands to the user

@@ -5,7 +5,7 @@ from _thread import *
 import argparse
 
 '''
-@Author: Jike Zhong, xxx
+@Author: Jike Zhong
 CSE 3461 Final Project
 '''
   
