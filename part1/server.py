@@ -7,7 +7,6 @@ from datetime import date
 
 '''
 @Author: Jike Zhong
-CSE 3461 Final Project
 '''
 #We utilize OOP design concept to make Message, Group and Thread instances
 class Message():
