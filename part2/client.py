@@ -6,7 +6,6 @@ import argparse
 
 '''
 @Author: Jike Zhong
-CSE 3461 Final Project
 '''
   
 def arg_parse():
